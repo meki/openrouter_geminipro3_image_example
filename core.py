@@ -80,6 +80,8 @@ def save_response_images(output_base_folder, response):
         output_image_path = output_folder_path / f"output_{id}_{idx}.jpg"
         save_base64_url_to_file(base64_response, output_image_path)
         print(f"Saved image to {output_image_path}")
+    
+    return output_folder_path
 
 def gemini_pro_3_image_preview_request(prompt_text, image_paths, openrouter_api_key):
     text_content = {"type": "text", "text": prompt_text}
