@@ -38,15 +38,15 @@ def save_base64_url_to_file(base64_url, output_path):
     Path(output_path).write_bytes(base64.b64decode(base64_image))
 
 
-def _gemini_pro_3_image_preview_request(messages, openrouter_api_key=None):
+def image_generation_request(messages, model, openrouter_api_key=None):
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {openrouter_api_key or os.getenv('OPENROUTER_API_KEY')}",
         "Content-Type": "application/json"
     }
-    gemini_3_pro_image_preview = "google/gemini-3-pro-image-preview"
+
     payload = {
-        "model": gemini_3_pro_image_preview,
+        "model": model,
         "messages": messages,
         "modalities": ["image", "text"]
     }
@@ -55,7 +55,7 @@ def _gemini_pro_3_image_preview_request(messages, openrouter_api_key=None):
                              json=payload, timeout=(10, 300))
     return response
 
-def save_response_images(output_base_folder, response):
+def save_response_images(output_base_folder, response, prompt_info_data):
     response_data = response.json()
     images = response_data.get("choices", [])[0].get(
         "message", {}).get("images", [])
@@ -68,8 +68,8 @@ def save_response_images(output_base_folder, response):
 
     today_folder = output_base_folder / yyyymmdd_hy
     today_folder.mkdir(parents=True, exist_ok=True)
-    output_folder_path = today_folder / f"{yyyymmddhhmmss}_{id}"
-    output_json_path = output_folder_path / "response.json"
+    output_folder_path = today_folder
+    output_json_path = output_folder_path / f"{yyyymmddhhmmss}_{id}_response.json"
 
     output_folder_path.mkdir(parents=True, exist_ok=True)
     output_json_path.write_text(json.dumps(
@@ -77,10 +77,14 @@ def save_response_images(output_base_folder, response):
 
     for idx, image_info in enumerate(images):
         base64_response = image_info["image_url"]["url"]
-        output_image_path = output_folder_path / f"output_{id}_{idx}.jpg"
+        output_image_path = output_folder_path / f"{yyyymmddhhmmss}_{id}_{idx}.jpg"
         save_base64_url_to_file(base64_response, output_image_path)
         print(f"Saved image to {output_image_path}")
-    
+
+    # prompt_info.yamlを保存
+    prompt_info_output_path = output_folder_path / f"{yyyymmddhhmmss}_{id}_prompt_info.yaml"
+    prompt_info_output_path.write_text(yaml.dump(prompt_info_data, allow_unicode=True), encoding="utf-8")
+
     return output_folder_path
 
 def gemini_pro_3_image_preview_request(prompt_text, image_paths, openrouter_api_key):
@@ -105,7 +109,32 @@ def gemini_pro_3_image_preview_request(prompt_text, image_paths, openrouter_api_
         }
     ]
 
-    response = _gemini_pro_3_image_preview_request(messages, openrouter_api_key=openrouter_api_key)
+    response = image_generation_request(messages, model="google/gemini-3-pro-image-preview", openrouter_api_key=openrouter_api_key)
+    return response
+
+def flux_2_pro_image_preview_request(prompt_text, image_paths, openrouter_api_key):
+    text_content = {"type": "text", "text": prompt_text}
+
+    image_contents = [
+        {
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:image/jpeg;base64,{encode_image_to_base64(path)}"
+            }
+        }
+        for path in image_paths
+    ]
+
+    messages = [
+        {"role": "user",
+                "content": [
+                    text_content,
+                    *image_contents
+                ]
+        }
+    ]
+
+    response = image_generation_request(messages, model="black-forest-labs/flux.2-pro", openrouter_api_key=openrouter_api_key)
     return response
 
 def main():
