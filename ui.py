@@ -20,7 +20,7 @@ def load_prompt_info(file):
     """
 prompt_info.yamlを読み込んでフォームに流し込む"""
     if file is None:
-        return "", "", "", "", None, None, None
+        return "", "", "", "", "", "", None, None, None, None, None
 
     try:
         file_path = Path(file.name) if hasattr(file, 'name') else Path(file)
@@ -31,10 +31,12 @@ prompt_info.yamlを読み込んでフォームに流し込む"""
         prompt_text = prompt_info.get("text", "")
         image_paths = prompt_info.get("image_paths", [])
 
-        # 最大3個の画像パスを取得
+        # 最大5個の画像パスを取得
         path1 = image_paths[0] if len(image_paths) > 0 else ""
         path2 = image_paths[1] if len(image_paths) > 1 else ""
         path3 = image_paths[2] if len(image_paths) > 2 else ""
+        path4 = image_paths[3] if len(image_paths) > 3 else ""
+        path5 = image_paths[4] if len(image_paths) > 4 else ""
 
         # 画像プレビューを読み込み
         preview1 = Image.open(path1) if path1 and Path(
@@ -43,11 +45,15 @@ prompt_info.yamlを読み込んでフォームに流し込む"""
             path2).exists() else None
         preview3 = Image.open(path3) if path3 and Path(
             path3).exists() else None
+        preview4 = Image.open(path4) if path4 and Path(
+            path4).exists() else None
+        preview5 = Image.open(path5) if path5 and Path(
+            path5).exists() else None
 
-        return prompt_text, path1, path2, path3, preview1, preview2, preview3
+        return prompt_text, path1, path2, path3, path4, path5, preview1, preview2, preview3, preview4, preview5
 
     except Exception:
-        return "", "", "", "", None, None, None
+        return "", "", "", "", "", "", None, None, None, None, None
 
 
 def load_image_preview(path):
@@ -193,12 +199,12 @@ def create_ui():
 
         gr.Markdown("### Image Paths")
 
-        # 画像パス入力フィールド (デフォルト3個)
+        # 画像パス入力フィールド (デフォルト5個)
         image_path_inputs = []
         image_path_warnings = []
         image_previews = []
 
-        for i in range(3):
+        for i in range(5):
             with gr.Row():
                 with gr.Column(scale=3):
                     image_path = gr.Textbox(
@@ -262,8 +268,8 @@ def create_ui():
         prompt_info_file.change(
             fn=load_prompt_info,
             inputs=[prompt_info_file],
-            outputs=[prompt, image_path_inputs[0], image_path_inputs[1], image_path_inputs[2],
-                     image_previews[0], image_previews[1], image_previews[2]]
+            outputs=[prompt, image_path_inputs[0], image_path_inputs[1], image_path_inputs[2], image_path_inputs[3], image_path_inputs[4],
+                     image_previews[0], image_previews[1], image_previews[2], image_previews[3], image_previews[4]]
         )
 
         # カスタムCSS
