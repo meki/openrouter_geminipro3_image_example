@@ -72,6 +72,26 @@ def get_history_choices():
     return [p for p in history if Path(p).exists()]
 
 
+def show_image_row(current_count):
+    """画像フォームの表示数を増やす"""
+    new_count = min(current_count + 1, 10)  # 最大10個まで
+    updates = []
+    for i in range(10):
+        updates.append(gr.Row(visible=(i < new_count)))
+    updates.append(new_count)
+    return updates
+
+
+def hide_image_row(current_count):
+    """画像フォームの表示数を減らす"""
+    new_count = max(current_count - 1, 1)  # 最低1個は表示
+    updates = []
+    for i in range(10):
+        updates.append(gr.Row(visible=(i < new_count)))
+    updates.append(new_count)
+    return updates
+
+
 def check_image_path(path):
     """画像パスが存在するかチェック"""
     if not path or path.strip() or path.strip('"') == "":
@@ -171,21 +191,21 @@ def run_request(output_folder, api_key, model, prompt, *image_paths):
 
     if not valid_image_paths:
         history = get_history_choices()
-        return "エラー: 少なくとも1つの画像パスを指定してください", None, *([gr.Dropdown(choices=history)] * 5)
+        return "エラー: 少なくとも1つの画像パスを指定してください", None, *([gr.Dropdown(choices=history)] * 10)
 
     # パスの存在確認
     for path in valid_image_paths:
         if not Path(path).exists():
             history = get_history_choices()
-            return f"エラー: 画像パスが存在しません: {path}", None, *([gr.Dropdown(choices=history)] * 5)
+            return f"エラー: 画像パスが存在しません: {path}", None, *([gr.Dropdown(choices=history)] * 10)
 
     if not prompt or prompt.strip() == "":
         history = get_history_choices()
-        return "エラー: プロンプトを入力してください", None, *([gr.Dropdown(choices=history)] * 5)
+        return "エラー: プロンプトを入力してください", None, *([gr.Dropdown(choices=history)] * 10)
 
     if not api_key or api_key.strip() == "":
         history = get_history_choices()
-        return "エラー: OpenRouter API Keyを入力してください", None, *([gr.Dropdown(choices=history)] * 5)
+        return "エラー: OpenRouter API Keyを入力してください", None, *([gr.Dropdown(choices=history)] * 10)
     
     # 画像パスを履歴に追加
     for path in valid_image_paths:
@@ -202,7 +222,7 @@ def run_request(output_folder, api_key, model, prompt, *image_paths):
 
         if response.status_code != 200:
             history = get_history_choices()
-            return f"エラー: {response.status_code}\n{response.text}", None, *([gr.Dropdown(choices=history)] * 5)
+            return f"エラー: {response.status_code}\n{response.text}", None, *([gr.Dropdown(choices=history)] * 10)
 
         prompt_info_data = {
             "text": prompt,
@@ -243,11 +263,11 @@ def run_request(output_folder, api_key, model, prompt, *image_paths):
         
         # 更新された履歴を取得
         updated_history = get_history_choices()
-        return result, pil_images if pil_images else None, *([gr.Dropdown(choices=updated_history)] * 5)
+        return result, pil_images if pil_images else None, *([gr.Dropdown(choices=updated_history)] * 10)
 
     except Exception as e:
         history = get_history_choices()
-        return f"エラーが発生しました: {str(e)}", None, *([gr.Dropdown(choices=history)] * 5)
+        return f"エラーが発生しました: {str(e)}", None, *([gr.Dropdown(choices=history)] * 10)
 
 
 def create_ui():
@@ -301,18 +321,22 @@ def create_ui():
             )
 
         gr.Markdown("### Image Paths")
+        
+        visible_count = gr.State(value=1)  # 現在表示されているフォームの数
 
-        # 画像パス入力フィールド (デフォルト5個)
+        # 画像パス入力フィールド (最大10個作成、デフォルト1個表示)
         image_path_inputs = []
         image_path_warnings = []
         image_previews = []
         image_uploads = []
+        image_rows = []
         
         # 履歴を取得
         history_choices = get_history_choices()
 
-        for i in range(5):
-            with gr.Row():
+        for i in range(10):
+            with gr.Row(visible=(i < 1)) as row:
+                image_rows.append(row)
                 with gr.Column(scale=3):
                     image_path = gr.Dropdown(
                         label=f"Image Path {i+1}",
@@ -363,6 +387,25 @@ def create_ui():
                 inputs=[image_upload],
                 outputs=[image_path, preview]
             )
+        
+        # 画像フォーム追加・削除ボタン
+        with gr.Row():
+            add_image_btn = gr.Button("➕ 画像フォームを追加", size="sm")
+            remove_image_btn = gr.Button("➖ 画像フォームを削除", size="sm")
+        
+        # 画像フォーム追加ボタンのイベント
+        add_image_btn.click(
+            fn=show_image_row,
+            inputs=[visible_count],
+            outputs=[*image_rows, visible_count]
+        )
+        
+        # 画像フォーム削除ボタンのイベント
+        remove_image_btn.click(
+            fn=hide_image_row,
+            inputs=[visible_count],
+            outputs=[*image_rows, visible_count]
+        )
 
         with gr.Row():
             run_btn = gr.Button("Run", variant="primary")
