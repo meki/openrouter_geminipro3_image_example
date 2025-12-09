@@ -57,8 +57,10 @@ def add_to_history(path):
     
     # 先頭に追加
     history.insert(0, path)
-    # 最大300件に制限
-    history = history[:300]
+    
+    # 最大件数をsettingsから取得（デフォルト300件）
+    max_history = settings.get("max_history_count", 300)
+    history = history[:max_history]
     
     settings["image_path_history"] = history
     save_settings(settings)
@@ -70,6 +72,39 @@ def get_history_choices():
     history = settings.get("image_path_history", [])
     # 存在するパスのみを返す
     return [p for p in history if Path(p).exists()]
+
+
+def get_history_gallery():
+    """履歴画像をギャラリー用のタプルリストで取得"""
+    settings = load_settings()
+    max_gallery_display = settings.get("max_gallery_display", 50)  # デフォルト50件
+    
+    history_paths = get_history_choices()
+    gallery_items = []
+    for path in history_paths[:max_gallery_display]:
+        try:
+            if Path(path).exists():
+                # (PIL Image, caption)のタプルで返す
+                img = Image.open(path)
+                # パスの最後の部分をキャプションに
+                caption = Path(path).name
+                gallery_items.append((img, caption))
+        except Exception:
+            continue
+    return gallery_items
+
+
+def select_from_gallery(evt: gr.SelectData):
+    """ギャラリーから画像を選択したときの処理"""
+    history_paths = get_history_choices()
+    if evt.index < len(history_paths):
+        selected_path = history_paths[evt.index]
+        try:
+            preview = Image.open(selected_path) if Path(selected_path).exists() else None
+            return selected_path, preview
+        except Exception:
+            return selected_path, None
+    return "", None
 
 
 def show_image_row(current_count):
@@ -343,6 +378,9 @@ def create_ui():
         
         # 履歴を取得
         history_choices = get_history_choices()
+        
+        # 履歴ギャラリーのリストを保持
+        history_galleries = []
 
         for i in range(10):
             with gr.Row(visible=(i < 1)) as row:
@@ -356,6 +394,19 @@ def create_ui():
                         interactive=True
                     )
                     image_path_inputs.append(image_path)
+                    
+                    # 履歴から画像を選択するギャラリー
+                    with gr.Accordion(f"履歴から画像を選択 {i+1}", open=False):
+                        history_gallery = gr.Gallery(
+                            label="画像履歴",
+                            value=get_history_gallery(),
+                            columns=5,
+                            rows=2,
+                            height=300,
+                            object_fit="contain",
+                            show_label=False
+                        )
+                        history_galleries.append(history_gallery)
                     
                     # 画像アップロード用
                     image_upload = gr.Image(
@@ -395,6 +446,12 @@ def create_ui():
             image_upload.change(
                 fn=handle_image_upload,
                 inputs=[image_upload],
+                outputs=[image_path, preview]
+            )
+            
+            # 履歴ギャラリーから画像を選択した時の処理
+            history_gallery.select(
+                fn=select_from_gallery,
                 outputs=[image_path, preview]
             )
         
