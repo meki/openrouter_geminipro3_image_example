@@ -133,6 +133,11 @@ def get_history_gallery(filter_mode="all"):
     
     Args:
         filter_mode: "all" (全て), "favorites" (お気に入りのみ)
+    
+    Returns:
+        tuple: (gallery_items, displayed_paths)
+            - gallery_items: ギャラリー表示用の(PIL Image, caption)リスト
+            - displayed_paths: 実際に表示されている画像のパスリスト
     """
     settings = load_settings()
     max_gallery_display = settings.get("max_gallery_display", 50)  # デフォルト50件
@@ -143,6 +148,7 @@ def get_history_gallery(filter_mode="all"):
         history_paths = get_history_choices()
     
     gallery_items = []
+    displayed_paths = []  # 実際に表示されているパスのリスト
     favorites_set = set(settings.get("favorite_image_paths", []))
     
     for path in history_paths[:max_gallery_display]:
@@ -154,9 +160,10 @@ def get_history_gallery(filter_mode="all"):
                 star = "★ " if path in favorites_set else ""
                 caption = star + Path(path).name
                 gallery_items.append((img, caption))
+                displayed_paths.append(path)  # 表示されたパスを記録
         except Exception:
             continue
-    return gallery_items
+    return gallery_items, displayed_paths
 
 
 def load_image_preview(path):

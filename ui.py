@@ -11,7 +11,6 @@ from utility import (
     add_to_favorites,
     remove_from_favorites,
     is_favorite,
-    get_favorites_choices,
     get_history_gallery,
     load_image_preview,
     check_image_path,
@@ -19,15 +18,15 @@ from utility import (
 )
 
 
-def select_from_gallery(evt: gr.SelectData, filter_mode="all"):
-    """ギャラリーから画像を選択したときの処理"""
-    if filter_mode == "favorites":
-        history_paths = get_favorites_choices()
-    else:
-        history_paths = get_history_choices()
+def select_from_gallery(evt: gr.SelectData, displayed_paths):
+    """ギャラリーから画像を選択したときの処理
     
-    if evt.index < len(history_paths):
-        selected_path = history_paths[evt.index]
+    Args:
+        evt: GradioのSelectDataイベント
+        displayed_paths: ギャラリーに表示されている画像パスのリスト
+    """
+    if evt.index < len(displayed_paths):
+        selected_path = displayed_paths[evt.index]
         try:
             preview = Image.open(selected_path) if Path(selected_path).exists() else None
             return selected_path, preview
@@ -38,13 +37,15 @@ def select_from_gallery(evt: gr.SelectData, filter_mode="all"):
 
 def update_gallery_display(filter_mode):
     """ギャラリーの表示を更新"""
-    return get_history_gallery(filter_mode)
+    gallery_items, displayed_paths = get_history_gallery(filter_mode)
+    return gallery_items, displayed_paths
 
 
 def toggle_favorite(current_path, filter_mode):
     """お気に入りの追加/削除を切り替え"""
     if not current_path or current_path.strip() == "":
-        return get_history_gallery(filter_mode), "画像パスを選択してください"
+        gallery_items, displayed_paths = get_history_gallery(filter_mode)
+        return gallery_items, displayed_paths, "画像パスを選択してください"
     
     current_path = current_path.strip('"')
     
@@ -56,7 +57,8 @@ def toggle_favorite(current_path, filter_mode):
         message = f"お気に入りに追加しました: {Path(current_path).name}"
     
     # ギャラリーを更新して返す
-    return get_history_gallery(filter_mode), message
+    gallery_items, displayed_paths = get_history_gallery(filter_mode)
+    return gallery_items, displayed_paths, message
 
 
 def show_image_row(current_count):
@@ -283,6 +285,7 @@ def create_ui():
         
         # 履歴ギャラリーのリストを保持
         history_galleries = []
+        gallery_path_states = []  # 各ギャラリーの表示パスリストを保持するState
         filter_radios = []
         favorite_buttons = []
         favorite_messages = []
@@ -321,9 +324,14 @@ def create_ui():
                         favorite_msg = gr.Markdown(value="", elem_classes=["favorite-message"])
                         favorite_messages.append(favorite_msg)
                         
+                        # ギャラリーの表示パスリストを保持するState
+                        gallery_items, displayed_paths = get_history_gallery("all")
+                        gallery_path_state = gr.State(value=displayed_paths)
+                        gallery_path_states.append(gallery_path_state)
+                        
                         history_gallery = gr.Gallery(
                             label="画像履歴",
-                            value=get_history_gallery("all"),
+                            value=gallery_items,
                             columns=5,
                             rows=2,
                             height=300,
@@ -377,20 +385,20 @@ def create_ui():
             filter_radio.change(
                 fn=lambda mode: update_gallery_display("favorites" if mode == "お気に入りのみ" else "all"),
                 inputs=[filter_radio],
-                outputs=[history_gallery]
+                outputs=[history_gallery, gallery_path_state]
             )
             
             # お気に入りボタンのクリック処理
             favorite_btn.click(
                 fn=lambda path, mode: toggle_favorite(path, "favorites" if mode == "お気に入りのみ" else "all"),
                 inputs=[image_path, filter_radio],
-                outputs=[history_gallery, favorite_msg]
+                outputs=[history_gallery, gallery_path_state, favorite_msg]
             )
             
             # 履歴ギャラリーから画像を選択した時の処理
             history_gallery.select(
-                fn=lambda evt, mode: select_from_gallery(evt, "favorites" if mode == "お気に入りのみ" else "all"),
-                inputs=[filter_radio],
+                fn=select_from_gallery,
+                inputs=[gallery_path_state],
                 outputs=[image_path, preview]
             )
         
