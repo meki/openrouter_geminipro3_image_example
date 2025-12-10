@@ -131,30 +131,54 @@ prompt_info.yamlを読み込んでフォームに流し込む"""
         return "", *empty_paths, *empty_previews, *empty_rows, 1
 
 
-def run_request(output_folder, api_key, model, prompt, *image_paths):
-    """リクエストを実行して結果を返す"""
+def run_request(output_folder, api_key, model, prompt, *args):
+    """リクエストを実行して結果を返す
+    
+    Args:
+        output_folder: 出力フォルダ
+        api_key: APIキー
+        model: モデル名
+        prompt: プロンプト
+        *args: image_path_inputs (10個) + filter_radios (10個)
+    
+    Returns:
+        result_text, image_gallery, *dropdown_updates (10), *gallery_updates (10), *state_updates (10)
+    """
+    # 引数を分解
+    image_paths = args[:10]  # 最初の10個が画像パス
+    filter_modes = args[10:20] if len(args) >= 20 else ["全て"] * 10  # 次の10個がフィルターモード
+    
     # 空のパスをフィルタリング
     valid_image_paths = [p for p in image_paths if p and p.strip() != ""]
-
     valid_image_paths = [p.strip('"') for p in valid_image_paths]
 
-    if not valid_image_paths:
+    # エラー時のデフォルト返り値を作成する関数
+    def create_error_response(message):
         history = get_history_choices()
-        return "エラー: 少なくとも1つの画像パスを指定してください", None, *([gr.Dropdown(choices=history)] * 10)
+        dropdown_updates = [gr.Dropdown(choices=history)] * 10
+        # 各フィルターモードに応じてギャラリーを更新
+        gallery_updates = []
+        state_updates = []
+        for mode in filter_modes:
+            filter_mode = "favorites" if mode == "お気に入りのみ" else "all"
+            gallery_items, displayed_paths = get_history_gallery(filter_mode)
+            gallery_updates.append(gallery_items)
+            state_updates.append(displayed_paths)
+        return message, None, *dropdown_updates, *gallery_updates, *state_updates
+
+    if not valid_image_paths:
+        return create_error_response("エラー: 少なくとも1つの画像パスを指定してください")
 
     # パスの存在確認
     for path in valid_image_paths:
         if not Path(path).exists():
-            history = get_history_choices()
-            return f"エラー: 画像パスが存在しません: {path}", None, *([gr.Dropdown(choices=history)] * 10)
+            return create_error_response(f"エラー: 画像パスが存在しません: {path}")
 
     if not prompt or prompt.strip() == "":
-        history = get_history_choices()
-        return "エラー: プロンプトを入力してください", None, *([gr.Dropdown(choices=history)] * 10)
+        return create_error_response("エラー: プロンプトを入力してください")
 
     if not api_key or api_key.strip() == "":
-        history = get_history_choices()
-        return "エラー: OpenRouter API Keyを入力してください", None, *([gr.Dropdown(choices=history)] * 10)
+        return create_error_response("エラー: OpenRouter API Keyを入力してください")
     
     # 画像パスを履歴に追加
     for path in valid_image_paths:
@@ -170,8 +194,7 @@ def run_request(output_folder, api_key, model, prompt, *image_paths):
                 prompt, valid_image_paths, api_key)
 
         if response.status_code != 200:
-            history = get_history_choices()
-            return f"エラー: {response.status_code}\n{response.text}", None, *([gr.Dropdown(choices=history)] * 10)
+            return create_error_response(f"エラー: {response.status_code}\n{response.text}")
 
         prompt_info_data = {
             "text": prompt,
@@ -210,13 +233,23 @@ def run_request(output_folder, api_key, model, prompt, *image_paths):
                 pil_image = get_image_from_base64(base64_data)
                 pil_images.append(pil_image)
         
-        # 更新された履歴を取得
+        # 更新された履歴を取得して全ドロップダウンとギャラリーを更新
         updated_history = get_history_choices()
-        return result, pil_images if pil_images else None, *([gr.Dropdown(choices=updated_history)] * 10)
+        dropdown_updates = [gr.Dropdown(choices=updated_history)] * 10
+        
+        # 各フィルターモードに応じてギャラリーを更新
+        gallery_updates = []
+        state_updates = []
+        for mode in filter_modes:
+            filter_mode = "favorites" if mode == "お気に入りのみ" else "all"
+            gallery_items, displayed_paths = get_history_gallery(filter_mode)
+            gallery_updates.append(gallery_items)
+            state_updates.append(displayed_paths)
+        
+        return result, pil_images if pil_images else None, *dropdown_updates, *gallery_updates, *state_updates
 
     except Exception as e:
-        history = get_history_choices()
-        return f"エラーが発生しました: {str(e)}", None, *([gr.Dropdown(choices=history)] * 10)
+        return create_error_response(f"エラーが発生しました: {str(e)}")
 
 
 def create_ui():
@@ -443,8 +476,8 @@ def create_ui():
         # Runボタンのクリックイベント
         run_btn.click(
             fn=run_request,
-            inputs=[output_folder, api_key, model_dropdown, prompt, *image_path_inputs],
-            outputs=[result_output, image_gallery, *image_path_inputs]
+            inputs=[output_folder, api_key, model_dropdown, prompt, *image_path_inputs, *filter_radios],
+            outputs=[result_output, image_gallery, *image_path_inputs, *history_galleries, *gallery_path_states]
         )
 
         # prompt_info.yamlアップロード時のイベント
