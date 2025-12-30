@@ -154,16 +154,10 @@ def run_request(output_folder, api_key, model, prompt, *args):
 
     # エラー時のデフォルト返り値を作成する関数
     def create_error_response(message):
-        history = get_history_choices()
-        dropdown_updates = [gr.Dropdown(choices=history)] * 10
-        # 各フィルターモードに応じてギャラリーを更新
-        gallery_updates = []
-        state_updates = []
-        for mode in filter_modes:
-            filter_mode = "favorites" if mode == "お気に入りのみ" else "all"
-            gallery_items, displayed_paths = get_history_gallery(filter_mode)
-            gallery_updates.append(gallery_items)
-            state_updates.append(displayed_paths)
+        # エラー時も履歴更新は省略
+        dropdown_updates = [gr.Dropdown()] * 10
+        gallery_updates = [gr.Gallery()] * 10
+        state_updates = [gr.State()] * 10
         return message, None, *dropdown_updates, *gallery_updates, *state_updates
 
     if not valid_image_paths:
@@ -199,16 +193,18 @@ def run_request(output_folder, api_key, model, prompt, *args):
         if response.status_code != 200:
             return create_error_response(f"エラー: {response.status_code}\n{response.text}")
 
+        response_data = response.json()
+        
         prompt_info_data = {
             "text": prompt,
             "image_paths": valid_image_paths
         }
 
-        # 結果を保存
-        save_response_images(Path(output_folder), response, prompt_info_data)
+        output_folder_path, saved_image_paths = save_response_images(
+            Path(output_folder), response_data, prompt_info_data
+        )
 
         # レスポンスから結果テキストを取得
-        response_data = response.json()
         result_text = response_data.get("choices", [])[0].get(
             "message", {}).get("content", "")
         images = response_data.get("choices", [])[0].get(
@@ -221,33 +217,26 @@ def run_request(output_folder, api_key, model, prompt, *args):
             result = f"⚠️ 画像生成失敗\n\n結果:\n{result_text}\n\n"
             result += f"生成された画像数: {len(images)}\n"
             result += f"Finish Reason: {native_finish_reason}\n"
-            result += f"保存先: {output_folder}"
+            result += f"保存先: {output_folder_path}"
         else:
             result = f"✅ 成功!\n\n結果:\n{result_text}\n\n"
             result += f"生成された画像数: {len(images)}\n"
-            result += f"保存先: {output_folder}"
+            result += f"保存先: {output_folder_path}"
 
-        # 画像をPIL形式に変換
+        # 保存済みファイルからPIL画像を読み込み（base64デコードの重複処理を回避）
         pil_images = []
-        if images:
-            for image_info in images:
-                base64_url = image_info["image_url"]["url"]
-                base64_data = base64_url_to_base64_image(base64_url)
-                pil_image = get_image_from_base64(base64_data)
+        for saved_path in saved_image_paths:
+            try:
+                pil_image = Image.open(saved_path)
                 pil_images.append(pil_image)
+            except Exception as e:
+                print(f"Failed to load saved image {saved_path}: {e}")
         
-        # 更新された履歴を取得して全ドロップダウンとギャラリーを更新
-        updated_history = get_history_choices()
-        dropdown_updates = [gr.Dropdown(choices=updated_history)] * 10
-        
-        # 各フィルターモードに応じてギャラリーを更新
-        gallery_updates = []
-        state_updates = []
-        for mode in filter_modes:
-            filter_mode = "favorites" if mode == "お気に入りのみ" else "all"
-            gallery_items, displayed_paths = get_history_gallery(filter_mode)
-            gallery_updates.append(gallery_items)
-            state_updates.append(displayed_paths)
+        # ドロップダウンとギャラリーの更新は省略（次回のユーザー操作時に自動更新される）
+        # これによりファイル保存完了後の待ち時間を最小化
+        dropdown_updates = [gr.Dropdown()] * 10  # 更新しない
+        gallery_updates = [gr.Gallery()] * 10  # 更新しない
+        state_updates = [gr.State()] * 10  # 更新しない
         
         return result, pil_images if pil_images else None, *dropdown_updates, *gallery_updates, *state_updates
 

@@ -67,8 +67,19 @@ def image_generation_request(messages, model, openrouter_api_key=None):
                              json=payload, timeout=(10, 300))
     return response
 
-def save_response_images(output_base_folder, response, prompt_info_data):
-    response_data = response.json()
+def save_response_images(output_base_folder, response_data, prompt_info_data):
+    """レスポンスの画像をファイルに保存し、保存したパスリストを返す
+    
+    Args:
+        output_base_folder: 出力先ベースフォルダ
+        response_data: パース済みのレスポンスJSON
+        prompt_info_data: プロンプト情報
+    
+    Returns:
+        tuple: (output_folder_path, saved_image_paths)
+            - output_folder_path: 保存先フォルダパス
+            - saved_image_paths: 保存した画像ファイルのパスリスト
+    """
     images = response_data.get("choices", [])[0].get(
         "message", {}).get("images", [])
 
@@ -87,17 +98,19 @@ def save_response_images(output_base_folder, response, prompt_info_data):
     output_json_path.write_text(json.dumps(
         response_data, indent=2), encoding="utf-8")
 
+    saved_image_paths = []
     for idx, image_info in enumerate(images):
         base64_response = image_info["image_url"]["url"]
         output_image_path = output_folder_path / f"{yyyymmddhhmmss}_{id}_{idx}"
         saved_path = save_base64_url_to_file(base64_response, output_image_path)
         print(f"Saved image to {saved_path}")
+        saved_image_paths.append(saved_path)
 
     # prompt_info.yamlを保存
     prompt_info_output_path = output_folder_path / f"{yyyymmddhhmmss}_{id}_prompt_info.yaml"
     prompt_info_output_path.write_text(yaml.dump(prompt_info_data, allow_unicode=True), encoding="utf-8")
 
-    return output_folder_path
+    return output_folder_path, saved_image_paths
 
 def unified_image_preview_request(prompt_text, image_paths, model, openrouter_api_key):
     """画像生成リクエストを送信する統合関数
@@ -169,7 +182,8 @@ def main():
         print(response.text)
         return
 
-    save_response_images(OUTPUT_BASE_FOLDER, response, prompt_info)
+    response_data = response.json()
+    save_response_images(OUTPUT_BASE_FOLDER, response_data, prompt_info)
 
 if __name__ == "__main__":
     main()
