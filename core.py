@@ -99,7 +99,18 @@ def save_response_images(output_base_folder, response, prompt_info_data):
 
     return output_folder_path
 
-def gemini_pro_3_image_preview_request(prompt_text, image_paths, openrouter_api_key):
+def unified_image_preview_request(prompt_text, image_paths, model, openrouter_api_key):
+    """画像生成リクエストを送信する統合関数
+    
+    Args:
+        prompt_text: プロンプトテキスト
+        image_paths: 入力画像のパスリスト
+        model: 使用するモデル名
+        openrouter_api_key: OpenRouter APIキー
+    
+    Returns:
+        APIレスポンス
+    """
     text_content = {"type": "text", "text": prompt_text}
 
     image_contents = [
@@ -121,33 +132,20 @@ def gemini_pro_3_image_preview_request(prompt_text, image_paths, openrouter_api_
         }
     ]
 
-    response = image_generation_request(messages, model="google/gemini-3-pro-image-preview", openrouter_api_key=openrouter_api_key)
+    response = image_generation_request(messages, model=model, openrouter_api_key=openrouter_api_key)
     return response
+
+def gemini_pro_3_image_preview_request(prompt_text, image_paths, openrouter_api_key):
+    """Gemini Pro 3を使用した画像生成リクエスト"""
+    return unified_image_preview_request(prompt_text, image_paths, "google/gemini-3-pro-image-preview", openrouter_api_key)
 
 def flux_2_pro_image_preview_request(prompt_text, image_paths, openrouter_api_key):
-    text_content = {"type": "text", "text": prompt_text}
+    """Flux 2 Proを使用した画像生成リクエスト"""
+    return unified_image_preview_request(prompt_text, image_paths, "black-forest-labs/flux.2-pro", openrouter_api_key)
 
-    image_contents = [
-        {
-            "type": "image_url",
-            "image_url": {
-                "url": f"data:image/jpeg;base64,{encode_image_to_base64(path)}"
-            }
-        }
-        for path in image_paths
-    ]
-
-    messages = [
-        {"role": "user",
-                "content": [
-                    text_content,
-                    *image_contents
-                ]
-        }
-    ]
-
-    response = image_generation_request(messages, model="black-forest-labs/flux.2-pro", openrouter_api_key=openrouter_api_key)
-    return response
+def speedream_4_5_image_preview_request(prompt_text, image_paths, openrouter_api_key):
+    """Speedream 4.5を使用した画像生成リクエスト"""
+    return unified_image_preview_request(prompt_text, image_paths, "bytedance-seed/seedream-4.5", openrouter_api_key)
 
 def main():
     load_dotenv()
@@ -171,7 +169,7 @@ def main():
         print(response.text)
         return
 
-    save_response_images(OUTPUT_BASE_FOLDER, response)
+    save_response_images(OUTPUT_BASE_FOLDER, response, prompt_info)
 
 if __name__ == "__main__":
     main()
