@@ -43,6 +43,8 @@ def save_base64_url_to_file(base64_url, output_path):
     # 出力パスの拡張子を画像フォーマットに合わせる
     output_path = Path(output_path)
     format_extension = image.format.lower() if image.format else 'png'
+    if format_extension == 'jpeg':
+        format_extension = 'jpg'
     output_path = output_path.with_suffix(f'.{format_extension}')
     
     # 画像を保存

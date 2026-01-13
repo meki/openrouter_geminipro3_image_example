@@ -66,7 +66,7 @@ def show_image_row(current_count):
     new_count = min(current_count + 1, 10)  # 最大10個まで
     updates = []
     for i in range(10):
-        updates.append(gr.Row(visible=(i < new_count)))
+        updates.append(gr.update(visible=(i < new_count)))
     updates.append(new_count)
     return updates
 
@@ -76,7 +76,7 @@ def hide_image_row(current_count):
     new_count = max(current_count - 1, 1)  # 最低1個は表示
     updates = []
     for i in range(10):
-        updates.append(gr.Row(visible=(i < new_count)))
+        updates.append(gr.update(visible=(i < new_count)))
     updates.append(new_count)
     return updates
 
@@ -88,7 +88,7 @@ prompt_info.yamlを読み込んでフォームに流し込む"""
         # ファイルがない場合は全て空で返す
         empty_paths = [""] * 10
         empty_previews = [None] * 10
-        empty_rows = [gr.Row(visible=(i < 1)) for i in range(10)]
+        empty_rows = [gr.update(visible=(i < 1)) for i in range(10)]
         return "", *empty_paths, *empty_previews, *empty_rows, 1
 
     try:
@@ -110,6 +110,9 @@ prompt_info.yamlを読み込んでフォームに流し込む"""
         for i in range(10):
             if i < len(image_paths):
                 path = image_paths[i]
+                # ダブルクォートで囲まれている場合は除去
+                if isinstance(path, str):
+                    path = path.strip('"')
                 paths.append(path)
                 # 画像プレビューを読み込み
                 preview = Image.open(path) if path and Path(path).exists() else None
@@ -119,7 +122,7 @@ prompt_info.yamlを読み込んでフォームに流し込む"""
                 previews.append(None)
         
         # Rowの表示設定（画像数分表示する）
-        row_updates = [gr.Row(visible=(i < num_images)) for i in range(10)]
+        row_updates = [gr.update(visible=(i < num_images)) for i in range(10)]
         
         return prompt_text, *paths, *previews, *row_updates, num_images
 
@@ -127,7 +130,7 @@ prompt_info.yamlを読み込んでフォームに流し込む"""
         # エラー時は全て空で返す
         empty_paths = [""] * 10
         empty_previews = [None] * 10
-        empty_rows = [gr.Row(visible=(i < 1)) for i in range(10)]
+        empty_rows = [gr.update(visible=(i < 1)) for i in range(10)]
         return "", *empty_paths, *empty_previews, *empty_rows, 1
 
 
