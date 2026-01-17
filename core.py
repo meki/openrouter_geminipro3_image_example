@@ -162,6 +162,10 @@ def speedream_4_5_image_preview_request(prompt_text, image_paths, openrouter_api
     """Speedream 4.5を使用した画像生成リクエスト"""
     return unified_image_preview_request(prompt_text, image_paths, "bytedance-seed/seedream-4.5", openrouter_api_key)
 
+def flux_klein_image_preview_request(prompt_text, image_paths, openrouter_api_key):
+    """Flux Kleinを使用した画像生成リクエスト"""
+    return unified_image_preview_request(prompt_text, image_paths, "black-forest-labs/flux.2-klein-4b", openrouter_api_key)
+
 def main():
     load_dotenv()
 
