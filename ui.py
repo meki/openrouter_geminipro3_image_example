@@ -163,10 +163,8 @@ def run_request(output_folder, api_key, model, prompt, *args):
         state_updates = [gr.State()] * 10
         return message, None, *dropdown_updates, *gallery_updates, *state_updates
 
-    if not valid_image_paths:
-        return create_error_response("エラー: 少なくとも1つの画像パスを指定してください")
-
-    # パスの存在確認
+    # 画像がない場合でもプロンプトがあればOK
+    # パスの存在確認（valid_image_pathsが空でない場合のみ）
     for path in valid_image_paths:
         if not Path(path).exists():
             return create_error_response(f"エラー: 画像パスが存在しません: {path}")

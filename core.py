@@ -119,7 +119,7 @@ def unified_image_preview_request(prompt_text, image_paths, model, openrouter_ap
     
     Args:
         prompt_text: プロンプトテキスト
-        image_paths: 入力画像のパスリスト
+        image_paths: 入力画像のパスリスト（空のリストも可）
         model: 使用するモデル名
         openrouter_api_key: OpenRouter APIキー
     
@@ -128,6 +128,7 @@ def unified_image_preview_request(prompt_text, image_paths, model, openrouter_ap
     """
     text_content = {"type": "text", "text": prompt_text}
 
+    # 画像がある場合のみ画像コンテンツを追加
     image_contents = [
         {
             "type": "image_url",
@@ -136,15 +137,13 @@ def unified_image_preview_request(prompt_text, image_paths, model, openrouter_ap
             }
         }
         for path in image_paths
-    ]
+    ] if image_paths else []
+
+    # コンテンツを構築（画像がない場合はテキストのみ）
+    content = [text_content, *image_contents] if image_contents else [text_content]
 
     messages = [
-        {"role": "user",
-                "content": [
-                    text_content,
-                    *image_contents
-                ]
-        }
+        {"role": "user", "content": content}
     ]
 
     response = image_generation_request(messages, model=model, openrouter_api_key=openrouter_api_key)
