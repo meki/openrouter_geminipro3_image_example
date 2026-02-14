@@ -101,9 +101,11 @@ def save_response_images(output_base_folder, response_data, prompt_info_data):
         response_data, indent=2), encoding="utf-8")
 
     saved_image_paths = []
-    for idx, image_info in enumerate(images):
+    # 最初の画像のみを保存（複数あっても全て同じ画像のため）
+    if images:
+        image_info = images[0]
         base64_response = image_info["image_url"]["url"]
-        output_image_path = output_folder_path / f"{yyyymmddhhmmss}_{id}_{idx}"
+        output_image_path = output_folder_path / f"{yyyymmddhhmmss}_{id}_0"
         saved_path = save_base64_url_to_file(base64_response, output_image_path)
         print(f"Saved image to {saved_path}")
         saved_image_paths.append(saved_path)
