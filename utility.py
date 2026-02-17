@@ -183,9 +183,9 @@ def load_image_preview(path):
 
 def check_image_path(path):
     """画像パスが存在するかチェック"""
-    if not path or path.strip() or path.strip('"') == "":
+    if not path or path.strip() == "" or path.strip('"') == "":
         return ""
-    if not Path(path).exists():
+    if not Path(path.strip('"')).exists():
         return f"⚠️ パスが存在しません: {path}"
     return ""
 

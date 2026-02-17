@@ -81,15 +81,18 @@ def hide_image_row(current_count):
     return updates
 
 
-def load_prompt_info(file):
+def load_prompt_info_phase1(file):
+    """prompt_info.yamlを読み込み、Rowの表示設定と解析データをStateに保存する（Phase 1）
+    
+    Gradio 6ではRow（非表示→表示）と同時にその中のDropdown値を設定すると
+    値が反映されないことがあるため、2段階に分けて処理する。
+    Phase 1: YAMLを読み込みRowの表示を更新し、解析データをStateに保存する
+    Phase 2: StateからデータをDropdown値とプレビューに設定する
     """
-prompt_info.yamlを読み込んでフォームに流し込む"""
+    empty_data = {"text": "", "image_paths": []}
     if file is None:
-        # ファイルがない場合は全て空で返す
-        empty_paths = [""] * 10
-        empty_previews = [None] * 10
-        empty_rows = [gr.update(visible=(i < 1)) for i in range(10)]
-        return "", *empty_paths, *empty_previews, *empty_rows, 1
+        row_updates = [gr.update(visible=(i < 1)) for i in range(10)]
+        return empty_data, *row_updates, 1
 
     try:
         file_path = Path(file.name) if hasattr(file, 'name') else Path(file)
@@ -99,39 +102,53 @@ prompt_info.yamlを読み込んでフォームに流し込む"""
 
         prompt_text = prompt_info.get("text", "")
         image_paths = prompt_info.get("image_paths", [])
-        
+        if not isinstance(image_paths, list):
+            image_paths = [image_paths] if image_paths else []
+
         # 画像数を取得し、最大10個まで制限
-        num_images = min(len(image_paths), 10)
-        
-        # 10個のパスとプレビューを準備
-        paths = []
-        previews = []
-        
-        for i in range(10):
-            if i < len(image_paths):
-                path = image_paths[i]
-                # ダブルクォートで囲まれている場合は除去
-                if isinstance(path, str):
-                    path = path.strip('"')
-                paths.append(path)
-                # 画像プレビューを読み込み
-                preview = Image.open(path) if path and Path(path).exists() else None
-                previews.append(preview)
-            else:
-                paths.append("")
-                previews.append(None)
-        
+        num_images = max(min(len(image_paths), 10), 1)
+
         # Rowの表示設定（画像数分表示する）
         row_updates = [gr.update(visible=(i < num_images)) for i in range(10)]
-        
-        return prompt_text, *paths, *previews, *row_updates, num_images
 
-    except Exception:
-        # エラー時は全て空で返す
-        empty_paths = [""] * 10
-        empty_previews = [None] * 10
-        empty_rows = [gr.update(visible=(i < 1)) for i in range(10)]
-        return "", *empty_paths, *empty_previews, *empty_rows, 1
+        parsed_data = {"text": prompt_text, "image_paths": image_paths}
+        return parsed_data, *row_updates, num_images
+
+    except Exception as e:
+        print(f"load_prompt_info_phase1 error: {e}")
+        row_updates = [gr.update(visible=(i < 1)) for i in range(10)]
+        return empty_data, *row_updates, 1
+
+
+def load_prompt_info_phase2(parsed_data):
+    """Stateに保存された解析データからDropdown値とプレビューを設定する（Phase 2）"""
+    if not parsed_data:
+        return "", *[""] * 10, *[None] * 10
+
+    prompt_text = parsed_data.get("text", "")
+    image_paths = parsed_data.get("image_paths", [])
+
+    paths = []
+    previews = []
+
+    for i in range(10):
+        if i < len(image_paths):
+            path = image_paths[i]
+            # ダブルクォートで囲まれている場合は除去
+            if isinstance(path, str):
+                path = path.strip('"')
+            paths.append(path)
+            # 画像プレビューを読み込み
+            try:
+                preview = Image.open(path) if path and Path(path).exists() else None
+            except Exception:
+                preview = None
+            previews.append(preview)
+        else:
+            paths.append("")
+            previews.append(None)
+
+    return prompt_text, *paths, *previews
 
 
 def run_request(output_folder, api_key, model, prompt, *args):
@@ -478,11 +495,18 @@ def create_ui():
             outputs=[result_output, image_gallery, *image_path_inputs, *history_galleries, *gallery_path_states]
         )
 
-        # prompt_info.yamlアップロード時のイベント
+        # prompt_info.yamlアップロード時のイベント（2段階処理）
+        # Phase 1: YAMLを読み込みRowの表示を更新し、解析データをStateに保存
+        # Phase 2: Stateからデータを取り出し、Dropdown値とプレビューを設定
+        prompt_info_parsed_state = gr.State(value=None)
         prompt_info_file.change(
-            fn=load_prompt_info,
+            fn=load_prompt_info_phase1,
             inputs=[prompt_info_file],
-            outputs=[prompt, *image_path_inputs, *image_previews, *image_rows, visible_count]
+            outputs=[prompt_info_parsed_state, *image_rows, visible_count]
+        ).then(
+            fn=load_prompt_info_phase2,
+            inputs=[prompt_info_parsed_state],
+            outputs=[prompt, *image_path_inputs, *image_previews]
         )
 
         # カスタムCSS
