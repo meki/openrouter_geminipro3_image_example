@@ -62,8 +62,11 @@ def image_generation_request(messages, model, openrouter_api_key=None):
     payload = {
         "model": model,
         "messages": messages,
-        "modalities": ["image", "text"]
     }
+
+    MODALITIES_SUPPORTED_PREFIXES = ("google/",)
+    if any(model.startswith(prefix) for prefix in MODALITIES_SUPPORTED_PREFIXES):
+        payload["modalities"] = ["image", "text"]
 
     response = requests.post(url, headers=headers,
                              json=payload, timeout=(10, 300))
@@ -150,6 +153,10 @@ def unified_image_preview_request(prompt_text, image_paths, model, openrouter_ap
 
     response = image_generation_request(messages, model=model, openrouter_api_key=openrouter_api_key)
     return response
+
+def gemini_pro_3_1_image_preview_request(prompt_text, image_paths, openrouter_api_key):
+    """Gemini Pro 3.1を使用した画像生成リクエスト"""
+    return unified_image_preview_request(prompt_text, image_paths, "google/gemini-3.1-flash-image-preview", openrouter_api_key)
 
 def gemini_pro_3_image_preview_request(prompt_text, image_paths, openrouter_api_key):
     """Gemini Pro 3を使用した画像生成リクエスト"""

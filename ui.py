@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from PIL import Image
 import gradio as gr
 import yaml
-from core import gemini_pro_3_image_preview_request, flux_2_pro_image_preview_request, speedream_4_5_image_preview_request, flux_klein_image_preview_request, save_response_images, get_image_from_base64, base64_url_to_base64_image
+from core import gemini_pro_3_1_image_preview_request, gemini_pro_3_image_preview_request, flux_2_pro_image_preview_request, speedream_4_5_image_preview_request, flux_klein_image_preview_request, save_response_images, get_image_from_base64, base64_url_to_base64_image
 from utility import (
     add_to_history,
     get_history_choices,
@@ -198,7 +198,10 @@ def run_request(output_folder, api_key, model, prompt, *args):
 
     try:
         # モデルに応じてリクエスト実行
-        if model == "google/gemini-3-pro-image-preview":
+        if model == "google/gemini-3.1-flash-image-preview":
+            response = gemini_pro_3_1_image_preview_request(
+                prompt, valid_image_paths, api_key)
+        elif model == "google/gemini-3-pro-image-preview":
             response = gemini_pro_3_image_preview_request(
                 prompt, valid_image_paths, api_key)
         elif model == "black-forest-labs/flux.2-pro":
@@ -293,12 +296,13 @@ def create_ui():
             model_dropdown = gr.Dropdown(
                 label="Model",
                 choices=[
+                    "google/gemini-3.1-flash-image-preview",
                     "google/gemini-3-pro-image-preview",
                     "black-forest-labs/flux.2-pro",
                     "bytedance-seed/seedream-4.5",
                     "black-forest-labs/flux.2-klein-4b"
                 ],
-                value="google/gemini-3-pro-image-preview"
+                value="google/gemini-3.1-flash-image-preview"
             )
 
         # prompt_info.yamlアップロード用
