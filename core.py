@@ -85,8 +85,10 @@ def save_response_images(output_base_folder, response_data, prompt_info_data):
             - output_folder_path: 保存先フォルダパス
             - saved_image_paths: 保存した画像ファイルのパスリスト
     """
-    images = response_data.get("choices", [])[0].get(
-        "message", {}).get("images", [])
+    choices = response_data.get("choices") or []
+    first_choice = choices[0] if choices else {}
+    message = first_choice.get("message", {}) if isinstance(first_choice, dict) else {}
+    images = message.get("images") or []
 
     now = datetime.datetime.now()
     yyyymmdd_hy = now.strftime("%Y-%m-%d")
@@ -107,11 +109,13 @@ def save_response_images(output_base_folder, response_data, prompt_info_data):
     # 最初の画像のみを保存（複数あっても全て同じ画像のため）
     if images:
         image_info = images[0]
-        base64_response = image_info["image_url"]["url"]
-        output_image_path = output_folder_path / f"{yyyymmddhhmmss}_{id}_0"
-        saved_path = save_base64_url_to_file(base64_response, output_image_path)
-        print(f"Saved image to {saved_path}")
-        saved_image_paths.append(saved_path)
+        image_url_data = image_info.get("image_url", {}) if isinstance(image_info, dict) else {}
+        base64_response = image_url_data.get("url")
+        if base64_response:
+            output_image_path = output_folder_path / f"{yyyymmddhhmmss}_{id}_0"
+            saved_path = save_base64_url_to_file(base64_response, output_image_path)
+            print(f"Saved image to {saved_path}")
+            saved_image_paths.append(saved_path)
 
     # prompt_info.yamlを保存
     prompt_info_output_path = output_folder_path / f"{yyyymmddhhmmss}_{id}_prompt_info.yaml"
