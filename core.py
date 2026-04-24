@@ -12,6 +12,15 @@ from PIL import Image
 
 # %%
 
+SUPPORTED_IMAGE_MODELS = [
+    "google/gemini-3.1-flash-image-preview",
+    "google/gemini-3-pro-image-preview",
+    "black-forest-labs/flux.2-pro",
+    "bytedance-seed/seedream-4.5",
+    "black-forest-labs/flux.2-klein-4b",
+    "openai/gpt-5.4-image-2",
+]
+
 
 def encode_image_to_base64(image_path):
     with open(image_path, "rb") as image_file:
@@ -64,7 +73,7 @@ def image_generation_request(messages, model, openrouter_api_key=None):
         "messages": messages,
     }
 
-    MODALITIES_SUPPORTED_PREFIXES = ("google/",)
+    MODALITIES_SUPPORTED_PREFIXES = ("google/", "openai/")
     if any(model.startswith(prefix) for prefix in MODALITIES_SUPPORTED_PREFIXES):
         payload["modalities"] = ["image", "text"]
 
@@ -178,6 +187,16 @@ def flux_klein_image_preview_request(prompt_text, image_paths, openrouter_api_ke
     """Flux Kleinを使用した画像生成リクエスト"""
     return unified_image_preview_request(prompt_text, image_paths, "black-forest-labs/flux.2-klein-4b", openrouter_api_key)
 
+def gpt_5_4_image_2_request(prompt_text, image_paths, openrouter_api_key):
+    """GPT-5.4 Image 2を使用した画像生成リクエスト"""
+    return unified_image_preview_request(prompt_text, image_paths, "openai/gpt-5.4-image-2", openrouter_api_key)
+
+def request_image_preview(prompt_text, image_paths, model, openrouter_api_key):
+    """対応済みモデル名を使って画像生成リクエストを送信する"""
+    if model not in SUPPORTED_IMAGE_MODELS:
+        raise ValueError(f"Unsupported model: {model}")
+    return unified_image_preview_request(prompt_text, image_paths, model, openrouter_api_key)
+
 def main():
     load_dotenv()
 
@@ -190,10 +209,16 @@ def main():
         prompt_info = yaml.safe_load(f)
         prompt_text = prompt_info.get("text", "")
         image_paths = prompt_info.get("image_paths", [])
+        model = prompt_info.get("model", "google/gemini-3-pro-image-preview")
 
     image_paths = [path.strip('"') for path in image_paths]
 
-    response = gemini_pro_3_image_preview_request(prompt_text, image_paths, OPENROUTER_API_KEY)
+    try:
+        response = request_image_preview(prompt_text, image_paths, model, OPENROUTER_API_KEY)
+    except ValueError as error:
+        print(error)
+        print(f"Supported models: {', '.join(SUPPORTED_IMAGE_MODELS)}")
+        return
 
     if response.status_code != 200:
         print(f"Error: {response.status_code}")

@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from PIL import Image
 import gradio as gr
 import yaml
-from core import gemini_pro_3_1_image_preview_request, gemini_pro_3_image_preview_request, flux_2_pro_image_preview_request, speedream_4_5_image_preview_request, flux_klein_image_preview_request, save_response_images, get_image_from_base64, base64_url_to_base64_image
+from core import SUPPORTED_IMAGE_MODELS, gemini_pro_3_1_image_preview_request, gemini_pro_3_image_preview_request, flux_2_pro_image_preview_request, speedream_4_5_image_preview_request, flux_klein_image_preview_request, gpt_5_4_image_2_request, save_response_images
 from utility import (
     add_to_history,
     get_history_choices,
@@ -17,6 +17,14 @@ from utility import (
     handle_image_upload
 )
 
+MODEL_REQUEST_HANDLERS = {
+    "google/gemini-3.1-flash-image-preview": gemini_pro_3_1_image_preview_request,
+    "google/gemini-3-pro-image-preview": gemini_pro_3_image_preview_request,
+    "black-forest-labs/flux.2-pro": flux_2_pro_image_preview_request,
+    "bytedance-seed/seedream-4.5": speedream_4_5_image_preview_request,
+    "black-forest-labs/flux.2-klein-4b": flux_klein_image_preview_request,
+    "openai/gpt-5.4-image-2": gpt_5_4_image_2_request,
+}
 
 def select_from_gallery(evt: gr.SelectData, displayed_paths):
     """ギャラリーから画像を選択したときの処理
@@ -166,8 +174,6 @@ def run_request(output_folder, api_key, model, prompt, *args):
     """
     # 引数を分解
     image_paths = args[:10]  # 最初の10個が画像パス
-    filter_modes = args[10:20] if len(args) >= 20 else ["全て"] * 10  # 次の10個がフィルターモード
-    
     # 空のパスをフィルタリング
     valid_image_paths = [p for p in image_paths if p and p.strip() != ""]
     valid_image_paths = [p.strip('"') for p in valid_image_paths]
@@ -197,27 +203,25 @@ def run_request(output_folder, api_key, model, prompt, *args):
         add_to_history(path)
 
     try:
-        # モデルに応じてリクエスト実行
-        if model == "google/gemini-3.1-flash-image-preview":
-            response = gemini_pro_3_1_image_preview_request(
-                prompt, valid_image_paths, api_key)
-        elif model == "google/gemini-3-pro-image-preview":
-            response = gemini_pro_3_image_preview_request(
-                prompt, valid_image_paths, api_key)
-        elif model == "black-forest-labs/flux.2-pro":
-            response = flux_2_pro_image_preview_request(
-                prompt, valid_image_paths, api_key)
-        elif model == "bytedance-seed/seedream-4.5":
-            response = speedream_4_5_image_preview_request(
-                prompt, valid_image_paths, api_key)
-        elif model == "black-forest-labs/flux.2-klein-4b":
-            response = flux_klein_image_preview_request(
-                prompt, valid_image_paths, api_key)
+        request_handler = MODEL_REQUEST_HANDLERS.get(model)
+        if request_handler is None:
+            return create_error_response(f"エラー: 未対応のモデルです: {model}")
+
+        response = request_handler(prompt, valid_image_paths, api_key)
 
         if response.status_code != 200:
             return create_error_response(f"エラー: {response.status_code}\n{response.text}")
 
         response_data = response.json()
+        choices = response_data.get("choices") or []
+
+        if not choices:
+            if response_data.get("error"):
+                return create_error_response(f"エラー: レスポンスに choices がありません\n{response_data.get('error')}")
+            return create_error_response(f"エラー: レスポンスに choices がありません\n{response_data}")
+
+        first_choice = choices[0] if isinstance(choices[0], dict) else {}
+        message = first_choice.get("message", {}) if isinstance(first_choice, dict) else {}
         
         prompt_info_data = {
             "text": prompt,
@@ -229,15 +233,17 @@ def run_request(output_folder, api_key, model, prompt, *args):
         )
 
         # レスポンスから結果テキストを取得
-        result_text = response_data.get("choices", [])[0].get(
-            "message", {}).get("content", "")
-        images = response_data.get("choices", [])[0].get(
-            "message", {}).get("images", [])
+        result_text = message.get("content", "")
+        if isinstance(result_text, list):
+            result_text = "\n".join(
+                item.get("text", "") if isinstance(item, dict) else str(item)
+                for item in result_text
+            )
+        images = message.get("images") or []
 
         # 画像が0枚の場合はfinish_reasonを表示
         if len(images) == 0:
-            native_finish_reason = response_data.get(
-                "choices", [])[0].get("native_finish_reason", "不明")
+            native_finish_reason = first_choice.get("native_finish_reason", "不明")
             result = f"⚠️ 画像生成失敗\n\n結果:\n{result_text}\n\n"
             result += f"生成された画像数: {len(images)}\n"
             result += f"Finish Reason: {native_finish_reason}\n"
@@ -295,14 +301,8 @@ def create_ui():
         with gr.Row():
             model_dropdown = gr.Dropdown(
                 label="Model",
-                choices=[
-                    "google/gemini-3.1-flash-image-preview",
-                    "google/gemini-3-pro-image-preview",
-                    "black-forest-labs/flux.2-pro",
-                    "bytedance-seed/seedream-4.5",
-                    "black-forest-labs/flux.2-klein-4b"
-                ],
-                value="google/gemini-3.1-flash-image-preview"
+                choices=SUPPORTED_IMAGE_MODELS,
+                value=SUPPORTED_IMAGE_MODELS[0]
             )
 
         # prompt_info.yamlアップロード用

@@ -1,6 +1,6 @@
-# OpenRouter Gemini Pro 3 Image Editing Example
+# OpenRouter Image Editing Example
 
-This project demonstrates how to use OpenRouter's Gemini Pro 3 model for image editing tasks. It includes an example script that takes an input image and a text prompt to modify the image accordingly.
+This project demonstrates how to use OpenRouter image generation and editing models, including `openai/gpt-5.4-image-2`.
 
 ## Setup
 
@@ -18,8 +18,8 @@ cp .env.example .env
 
 ## Usage
 
-Copy your input image to the specified path in `prompt_info.yaml` and modify the text prompt as needed. Then run the main script:
+Set `model`, `text`, and `image_paths` in `prompt_info.yaml` as needed. Then run the main script:
 
 ```bash
-uv run python main.py
+uv run python core.py
 ```
