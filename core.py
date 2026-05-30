@@ -18,8 +18,26 @@ SUPPORTED_IMAGE_MODELS = [
     "black-forest-labs/flux.2-pro",
     "bytedance-seed/seedream-4.5",
     "black-forest-labs/flux.2-klein-4b",
+    "recraft/recraft-v4-pro",
+    "recraft/recraft-v4",
     "openai/gpt-5.4-image-2",
+    "x-ai/grok-imagine-image-quality",
 ]
+
+MODEL_MODALITIES = {
+    "x-ai/grok-imagine-image-quality": ["image"],
+}
+
+MODALITIES_SUPPORTED_PREFIXES = ("google/", "openai/")
+TEXT_ONLY_STRING_CONTENT_MODELS = {"x-ai/grok-imagine-image-quality"}
+
+
+def get_model_modalities(model):
+    if model in MODEL_MODALITIES:
+        return MODEL_MODALITIES[model]
+    if any(model.startswith(prefix) for prefix in MODALITIES_SUPPORTED_PREFIXES):
+        return ["image", "text"]
+    return None
 
 
 def encode_image_to_base64(image_path):
@@ -73,9 +91,9 @@ def image_generation_request(messages, model, openrouter_api_key=None):
         "messages": messages,
     }
 
-    MODALITIES_SUPPORTED_PREFIXES = ("google/", "openai/")
-    if any(model.startswith(prefix) for prefix in MODALITIES_SUPPORTED_PREFIXES):
-        payload["modalities"] = ["image", "text"]
+    modalities = get_model_modalities(model)
+    if modalities:
+        payload["modalities"] = modalities
 
     response = requests.post(url, headers=headers,
                              json=payload, timeout=(10, 300))
@@ -157,8 +175,12 @@ def unified_image_preview_request(prompt_text, image_paths, model, openrouter_ap
         for path in image_paths
     ] if image_paths else []
 
-    # コンテンツを構築（画像がない場合はテキストのみ）
-    content = [text_content, *image_contents] if image_contents else [text_content]
+    if image_contents:
+        content = [text_content, *image_contents]
+    elif model in TEXT_ONLY_STRING_CONTENT_MODELS:
+        content = prompt_text
+    else:
+        content = [text_content]
 
     messages = [
         {"role": "user", "content": content}
@@ -186,6 +208,14 @@ def speedream_4_5_image_preview_request(prompt_text, image_paths, openrouter_api
 def flux_klein_image_preview_request(prompt_text, image_paths, openrouter_api_key):
     """Flux Kleinを使用した画像生成リクエスト"""
     return unified_image_preview_request(prompt_text, image_paths, "black-forest-labs/flux.2-klein-4b", openrouter_api_key)
+
+def recraft_v4_pro_image_preview_request(prompt_text, image_paths, openrouter_api_key):
+    """Recraft V4 Proを使用した画像生成リクエスト"""
+    return unified_image_preview_request(prompt_text, image_paths, "recraft/recraft-v4-pro", openrouter_api_key)
+
+def recraft_v4_image_preview_request(prompt_text, image_paths, openrouter_api_key):
+    """Recraft V4を使用した画像生成リクエスト"""
+    return unified_image_preview_request(prompt_text, image_paths, "recraft/recraft-v4", openrouter_api_key)
 
 def gpt_5_4_image_2_request(prompt_text, image_paths, openrouter_api_key):
     """GPT-5.4 Image 2を使用した画像生成リクエスト"""

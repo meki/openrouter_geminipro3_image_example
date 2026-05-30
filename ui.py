@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from PIL import Image
 import gradio as gr
 import yaml
-from core import SUPPORTED_IMAGE_MODELS, gemini_pro_3_1_image_preview_request, gemini_pro_3_image_preview_request, flux_2_pro_image_preview_request, speedream_4_5_image_preview_request, flux_klein_image_preview_request, gpt_5_4_image_2_request, save_response_images
+from core import SUPPORTED_IMAGE_MODELS, request_image_preview, save_response_images
 from utility import (
     add_to_history,
     get_history_choices,
@@ -17,14 +17,31 @@ from utility import (
     handle_image_upload
 )
 
-MODEL_REQUEST_HANDLERS = {
-    "google/gemini-3.1-flash-image-preview": gemini_pro_3_1_image_preview_request,
-    "google/gemini-3-pro-image-preview": gemini_pro_3_image_preview_request,
-    "black-forest-labs/flux.2-pro": flux_2_pro_image_preview_request,
-    "bytedance-seed/seedream-4.5": speedream_4_5_image_preview_request,
-    "black-forest-labs/flux.2-klein-4b": flux_klein_image_preview_request,
-    "openai/gpt-5.4-image-2": gpt_5_4_image_2_request,
-}
+
+# ==== Runtime workaround toggles ====
+# Set this to True only if you hit the intermittent runtime error:
+#   h11._util.LocalProtocolError: Too much data for declared Content-Length
+# Disabling Brotli avoids a rare Content-Length mismatch in Gradio's Brotli middleware.
+DISABLE_GRADIO_BROTLI_MIDDLEWARE = True
+
+# Workaround:
+# Intermittent ASGI runtime error from uvicorn/h11:
+#   h11._util.LocalProtocolError: Too much data for declared Content-Length
+# observed with Gradio's Brotli middleware. Disabling it avoids the mismatch.
+if DISABLE_GRADIO_BROTLI_MIDDLEWARE:
+    try:
+        import gradio.routes as _gradio_routes
+
+        class _NoOpMiddleware:
+            def __init__(self, app, *args, **kwargs):
+                self.app = app
+
+            async def __call__(self, scope, receive, send):
+                return await self.app(scope, receive, send)
+
+        _gradio_routes.BrotliMiddleware = _NoOpMiddleware  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
 def select_from_gallery(evt: gr.SelectData, displayed_paths):
     """ギャラリーから画像を選択したときの処理
@@ -203,11 +220,7 @@ def run_request(output_folder, api_key, model, prompt, *args):
         add_to_history(path)
 
     try:
-        request_handler = MODEL_REQUEST_HANDLERS.get(model)
-        if request_handler is None:
-            return create_error_response(f"エラー: 未対応のモデルです: {model}")
-
-        response = request_handler(prompt, valid_image_paths, api_key)
+        response = request_image_preview(prompt, valid_image_paths, model, api_key)
 
         if response.status_code != 200:
             return create_error_response(f"エラー: {response.status_code}\n{response.text}")
@@ -224,6 +237,7 @@ def run_request(output_folder, api_key, model, prompt, *args):
         message = first_choice.get("message", {}) if isinstance(first_choice, dict) else {}
         
         prompt_info_data = {
+            "model": model,
             "text": prompt,
             "image_paths": valid_image_paths
         }
