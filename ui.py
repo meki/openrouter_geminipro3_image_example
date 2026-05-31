@@ -268,11 +268,13 @@ def run_request(output_folder, api_key, model, prompt, *args):
             result += f"保存先: {output_folder_path}"
 
         # 保存済みファイルからPIL画像を読み込み（base64デコードの重複処理を回避）
-        pil_images = []
+        gallery_images = []
         for saved_path in saved_image_paths:
             try:
-                pil_image = Image.open(saved_path)
-                pil_images.append(pil_image)
+                if Path(saved_path).suffix.lower() == ".svg":
+                    gallery_images.append(str(saved_path))
+                else:
+                    gallery_images.append(Image.open(saved_path))
             except Exception as e:
                 print(f"Failed to load saved image {saved_path}: {e}")
         
@@ -282,7 +284,7 @@ def run_request(output_folder, api_key, model, prompt, *args):
         gallery_updates = [gr.Gallery()] * 10  # 更新しない
         state_updates = [gr.State()] * 10  # 更新しない
         
-        return result, pil_images if pil_images else None, *dropdown_updates, *gallery_updates, *state_updates
+        return result, gallery_images if gallery_images else None, *dropdown_updates, *gallery_updates, *state_updates
 
     except Exception as e:
         return create_error_response(f"エラーが発生しました: {str(e)}")

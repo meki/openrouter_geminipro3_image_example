@@ -1,6 +1,6 @@
 # OpenRouter Image Editing Example
 
-This project demonstrates how to use OpenRouter image generation and editing models, including `x-ai/grok-imagine-image-quality`, `openai/gpt-5.4-image-2`, `recraft/recraft-v4-pro`, and `recraft/recraft-v4`.
+This project demonstrates how to use OpenRouter image generation and editing models, including `recraft/recraft-v4.1-pro-vector`, `recraft/recraft-v4.1-vector`, `x-ai/grok-imagine-image-quality`, `openai/gpt-5.4-image-2`, `recraft/recraft-v4-pro`, and `recraft/recraft-v4`.
 
 ## Setup
 

@@ -3,6 +3,7 @@ import base64
 import datetime
 import json
 import os
+from urllib.parse import unquote_to_bytes
 from io import BytesIO
 from pathlib import Path
 from dotenv import load_dotenv
@@ -18,6 +19,8 @@ SUPPORTED_IMAGE_MODELS = [
     "black-forest-labs/flux.2-pro",
     "bytedance-seed/seedream-4.5",
     "black-forest-labs/flux.2-klein-4b",
+    "recraft/recraft-v4.1-pro-vector",
+    "recraft/recraft-v4.1-vector",
     "recraft/recraft-v4-pro",
     "recraft/recraft-v4",
     "openai/gpt-5.4-image-2",
@@ -25,11 +28,17 @@ SUPPORTED_IMAGE_MODELS = [
 ]
 
 MODEL_MODALITIES = {
+    "recraft/recraft-v4.1-pro-vector": ["image"],
+    "recraft/recraft-v4.1-vector": ["image"],
     "x-ai/grok-imagine-image-quality": ["image"],
 }
 
 MODALITIES_SUPPORTED_PREFIXES = ("google/", "openai/")
-TEXT_ONLY_STRING_CONTENT_MODELS = {"x-ai/grok-imagine-image-quality"}
+TEXT_ONLY_STRING_CONTENT_MODELS = {
+    "recraft/recraft-v4.1-pro-vector",
+    "recraft/recraft-v4.1-vector",
+    "x-ai/grok-imagine-image-quality",
+}
 
 
 def get_model_modalities(model):
@@ -60,16 +69,44 @@ def base64_url_to_base64_image(base64_url):
     return base64_url  # すでに base64 データの場合はそのまま返す
 
 
+def image_extension_from_media_type(media_type):
+    media_type = media_type.lower()
+    if media_type == "image/svg+xml":
+        return "svg"
+    if media_type == "image/jpeg":
+        return "jpg"
+    if media_type.startswith("image/"):
+        return media_type.split("/", 1)[1]
+    return None
+
+
+def decode_image_data_url(image_url):
+    if image_url.startswith("data:") and "," in image_url:
+        header, encoded_data = image_url.split(",", 1)
+        media_type = header[5:].split(";", 1)[0]
+        extension = image_extension_from_media_type(media_type)
+
+        if ";base64" in header.lower():
+            return base64.b64decode(encoded_data), extension
+        return unquote_to_bytes(encoded_data), extension
+
+    return base64.b64decode(base64_url_to_base64_image(image_url)), None
+
+
 def save_base64_url_to_file(base64_url, output_path):
-    base64_image = base64_url_to_base64_image(base64_url)
-    image_data = base64.b64decode(base64_image)
+    image_data, data_url_extension = decode_image_data_url(base64_url)
+    output_path = Path(output_path)
+
+    if data_url_extension == "svg":
+        output_path = output_path.with_suffix(".svg")
+        output_path.write_bytes(image_data)
+        return output_path
     
     # 画像フォーマットを自動判別
     image = Image.open(BytesIO(image_data))
     
     # 出力パスの拡張子を画像フォーマットに合わせる
-    output_path = Path(output_path)
-    format_extension = image.format.lower() if image.format else 'png'
+    format_extension = image.format.lower() if image.format else data_url_extension or 'png'
     if format_extension == 'jpeg':
         format_extension = 'jpg'
     output_path = output_path.with_suffix(f'.{format_extension}')
@@ -216,6 +253,14 @@ def recraft_v4_pro_image_preview_request(prompt_text, image_paths, openrouter_ap
 def recraft_v4_image_preview_request(prompt_text, image_paths, openrouter_api_key):
     """Recraft V4を使用した画像生成リクエスト"""
     return unified_image_preview_request(prompt_text, image_paths, "recraft/recraft-v4", openrouter_api_key)
+
+def recraft_v4_1_pro_vector_request(prompt_text, image_paths, openrouter_api_key):
+    """Recraft V4.1 Pro Vectorを使用した画像生成リクエスト"""
+    return unified_image_preview_request(prompt_text, image_paths, "recraft/recraft-v4.1-pro-vector", openrouter_api_key)
+
+def recraft_v4_1_vector_request(prompt_text, image_paths, openrouter_api_key):
+    """Recraft V4.1 Vectorを使用した画像生成リクエスト"""
+    return unified_image_preview_request(prompt_text, image_paths, "recraft/recraft-v4.1-vector", openrouter_api_key)
 
 def gpt_5_4_image_2_request(prompt_text, image_paths, openrouter_api_key):
     """GPT-5.4 Image 2を使用した画像生成リクエスト"""
