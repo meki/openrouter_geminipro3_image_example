@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -114,7 +115,7 @@ def load_prompt_info_phase1(file):
     Phase 1: YAMLを読み込みRowの表示を更新し、解析データをStateに保存する
     Phase 2: StateからデータをDropdown値とプレビューに設定する
     """
-    empty_data = {"text": "", "image_paths": []}
+    empty_data = {"model": None, "text": "", "image_paths": []}
     if file is None:
         row_updates = [gr.update(visible=(i < 1)) for i in range(10)]
         return empty_data, *row_updates, 1
@@ -123,8 +124,12 @@ def load_prompt_info_phase1(file):
         file_path = Path(file.name) if hasattr(file, 'name') else Path(file)
 
         with file_path.open("r", encoding="utf-8") as f:
-            prompt_info = yaml.safe_load(f)
+            if file_path.suffix.lower() == ".json":
+                prompt_info = json.load(f)
+            else:
+                prompt_info = yaml.safe_load(f)
 
+        model = prompt_info.get("model")
         prompt_text = prompt_info.get("text", "")
         image_paths = prompt_info.get("image_paths", [])
         if not isinstance(image_paths, list):
@@ -136,7 +141,7 @@ def load_prompt_info_phase1(file):
         # Rowの表示設定（画像数分表示する）
         row_updates = [gr.update(visible=(i < num_images)) for i in range(10)]
 
-        parsed_data = {"text": prompt_text, "image_paths": image_paths}
+        parsed_data = {"model": model, "text": prompt_text, "image_paths": image_paths}
         return parsed_data, *row_updates, num_images
 
     except Exception as e:
@@ -148,10 +153,16 @@ def load_prompt_info_phase1(file):
 def load_prompt_info_phase2(parsed_data):
     """Stateに保存された解析データからDropdown値とプレビューを設定する（Phase 2）"""
     if not parsed_data:
-        return "", *[""] * 10, *[None] * 10
+        return gr.update(), "", *[""] * 10, *[None] * 10
 
+    model = parsed_data.get("model")
     prompt_text = parsed_data.get("text", "")
     image_paths = parsed_data.get("image_paths", [])
+
+    if model in SUPPORTED_IMAGE_MODELS:
+        model_update = gr.update(value=model)
+    else:
+        model_update = gr.update()
 
     paths = []
     previews = []
@@ -173,7 +184,7 @@ def load_prompt_info_phase2(parsed_data):
             paths.append("")
             previews.append(None)
 
-    return prompt_text, *paths, *previews
+    return model_update, prompt_text, *paths, *previews
 
 
 def run_request(output_folder, api_key, model, prompt, *args):
@@ -203,6 +214,17 @@ def run_request(output_folder, api_key, model, prompt, *args):
         state_updates = [gr.State()] * 10
         return message, None, *dropdown_updates, *gallery_updates, *state_updates
 
+    def format_response_text(response, response_data=None):
+        response_text = (response.text or "").strip()
+        if response_text:
+            return response_text
+        if response_data is None:
+            return ""
+        try:
+            return json.dumps(response_data, ensure_ascii=False, indent=2)
+        except TypeError:
+            return str(response_data)
+
     # 画像がない場合でもプロンプトがあればOK
     # パスの存在確認（valid_image_pathsが空でない場合のみ）
     for path in valid_image_paths:
@@ -223,15 +245,21 @@ def run_request(output_folder, api_key, model, prompt, *args):
         response = request_image_preview(prompt, valid_image_paths, model, api_key)
 
         if response.status_code != 200:
-            return create_error_response(f"エラー: {response.status_code}\n{response.text}")
+            return create_error_response(
+                f"エラー: HTTP {response.status_code}\n"
+                f"Response Text:\n{format_response_text(response)}"
+            )
 
         response_data = response.json()
         choices = response_data.get("choices") or []
 
         if not choices:
-            if response_data.get("error"):
-                return create_error_response(f"エラー: レスポンスに choices がありません\n{response_data.get('error')}")
-            return create_error_response(f"エラー: レスポンスに choices がありません\n{response_data}")
+            return create_error_response(
+                "エラー: レスポンスに choices がありません\n"
+                f"HTTP Status: {response.status_code}\n"
+                "画像生成有無: 不明 (choices がないため判定できません)\n"
+                f"Response Text:\n{format_response_text(response, response_data)}"
+            )
 
         first_choice = choices[0] if isinstance(choices[0], dict) else {}
         message = first_choice.get("message", {}) if isinstance(first_choice, dict) else {}
@@ -248,7 +276,9 @@ def run_request(output_folder, api_key, model, prompt, *args):
 
         # レスポンスから結果テキストを取得
         result_text = message.get("content", "")
-        if isinstance(result_text, list):
+        if result_text is None:
+            result_text = ""
+        elif isinstance(result_text, list):
             result_text = "\n".join(
                 item.get("text", "") if isinstance(item, dict) else str(item)
                 for item in result_text
@@ -321,11 +351,11 @@ def create_ui():
                 value=SUPPORTED_IMAGE_MODELS[0]
             )
 
-        # prompt_info.yamlアップロード用
+        # prompt_info.yaml/jsonアップロード用
         with gr.Row():
             prompt_info_file = gr.File(
-                label="prompt_info.yamlをアップロード",
-                file_types=[".yaml", ".yml"],
+                label="prompt_info.yaml/jsonをアップロード",
+                file_types=[".yaml", ".yml", ".json"],
                 type="filepath",
                 height=150
             )
@@ -515,7 +545,7 @@ def create_ui():
             outputs=[result_output, image_gallery, *image_path_inputs, *history_galleries, *gallery_path_states]
         )
 
-        # prompt_info.yamlアップロード時のイベント（2段階処理）
+        # prompt_info.yaml/jsonアップロード時のイベント（2段階処理）
         # Phase 1: YAMLを読み込みRowの表示を更新し、解析データをStateに保存
         # Phase 2: Stateからデータを取り出し、Dropdown値とプレビューを設定
         prompt_info_parsed_state = gr.State(value=None)
@@ -526,7 +556,7 @@ def create_ui():
         ).then(
             fn=load_prompt_info_phase2,
             inputs=[prompt_info_parsed_state],
-            outputs=[prompt, *image_path_inputs, *image_previews]
+            outputs=[model_dropdown, prompt, *image_path_inputs, *image_previews]
         )
 
         # カスタムCSS

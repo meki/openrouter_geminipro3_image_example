@@ -2,6 +2,7 @@
 import base64
 import datetime
 import json
+import mimetypes
 import os
 from urllib.parse import unquote_to_bytes
 from io import BytesIO
@@ -24,10 +25,12 @@ SUPPORTED_IMAGE_MODELS = [
     "recraft/recraft-v4-pro",
     "recraft/recraft-v4",
     "openai/gpt-5.4-image-2",
+    "microsoft/mai-image-2.5",
     "x-ai/grok-imagine-image-quality",
 ]
 
 MODEL_MODALITIES = {
+    "microsoft/mai-image-2.5": ["image"],
     "recraft/recraft-v4.1-pro-vector": ["image"],
     "recraft/recraft-v4.1-vector": ["image"],
     "x-ai/grok-imagine-image-quality": ["image"],
@@ -35,6 +38,7 @@ MODEL_MODALITIES = {
 
 MODALITIES_SUPPORTED_PREFIXES = ("google/", "openai/")
 TEXT_ONLY_STRING_CONTENT_MODELS = {
+    "microsoft/mai-image-2.5",
     "recraft/recraft-v4.1-pro-vector",
     "recraft/recraft-v4.1-vector",
     "x-ai/grok-imagine-image-quality",
@@ -52,6 +56,13 @@ def get_model_modalities(model):
 def encode_image_to_base64(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
+
+
+def image_path_to_data_url(image_path):
+    media_type, _ = mimetypes.guess_type(str(image_path))
+    if not media_type:
+        media_type = "image/jpeg"
+    return f"data:{media_type};base64,{encode_image_to_base64(image_path)}"
 
 
 def get_image_from_base64(base64_image):
@@ -181,9 +192,15 @@ def save_response_images(output_base_folder, response_data, prompt_info_data):
             print(f"Saved image to {saved_path}")
             saved_image_paths.append(saved_path)
 
-    # prompt_info.yamlを保存
+    # prompt_info.yaml/jsonを保存
     prompt_info_output_path = output_folder_path / f"{yyyymmddhhmmss}_{id}_prompt_info.yaml"
     prompt_info_output_path.write_text(yaml.dump(prompt_info_data, allow_unicode=True), encoding="utf-8")
+
+    prompt_info_json_output_path = output_folder_path / f"{yyyymmddhhmmss}_{id}_prompt_info.json"
+    prompt_info_json_output_path.write_text(
+        json.dumps(prompt_info_data, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
 
     return output_folder_path, saved_image_paths
 
@@ -206,7 +223,7 @@ def unified_image_preview_request(prompt_text, image_paths, model, openrouter_ap
         {
             "type": "image_url",
             "image_url": {
-                "url": f"data:image/jpeg;base64,{encode_image_to_base64(path)}"
+                "url": image_path_to_data_url(path)
             }
         }
         for path in image_paths
