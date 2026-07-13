@@ -26,6 +26,7 @@ SUPPORTED_IMAGE_MODELS = [
     "recraft/recraft-v4-pro",
     "recraft/recraft-v4",
     "openai/gpt-5.4-image-2",
+    "openai/gpt-image-2",
     "microsoft/mai-image-2.5",
     "x-ai/grok-imagine-image-quality",
 ]
@@ -283,6 +284,10 @@ def recraft_v4_1_vector_request(prompt_text, image_paths, openrouter_api_key):
 def gpt_5_4_image_2_request(prompt_text, image_paths, openrouter_api_key):
     """GPT-5.4 Image 2を使用した画像生成リクエスト"""
     return unified_image_preview_request(prompt_text, image_paths, "openai/gpt-5.4-image-2", openrouter_api_key)
+
+def gpt_image_2_request(prompt_text, image_paths, openrouter_api_key):
+    """GPT-image-2を使用した画像生成リクエスト"""
+    return unified_image_preview_request(prompt_text, image_paths, "openai/gpt-image-2", openrouter_api_key)
 
 def request_image_preview(prompt_text, image_paths, model, openrouter_api_key):
     """対応済みモデル名を使って画像生成リクエストを送信する"""
