@@ -16,6 +16,7 @@ from PIL import Image
 
 SUPPORTED_IMAGE_MODELS = [
     "google/gemini-3.1-flash-image-preview",
+    "google/gemini-3.1-flash-lite-image",
     "google/gemini-3-pro-image-preview",
     "black-forest-labs/flux.2-pro",
     "bytedance-seed/seedream-4.5",
