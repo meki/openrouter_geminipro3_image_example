@@ -29,6 +29,7 @@ SUPPORTED_IMAGE_MODELS = [
     "openai/gpt-image-2",
     "microsoft/mai-image-2.5",
     "x-ai/grok-imagine-image-quality",
+    "krea/krea-2-large",
 ]
 
 MODEL_MODALITIES = {
@@ -36,6 +37,7 @@ MODEL_MODALITIES = {
     "recraft/recraft-v4.1-pro-vector": ["image"],
     "recraft/recraft-v4.1-vector": ["image"],
     "x-ai/grok-imagine-image-quality": ["image"],
+    "krea/krea-2-large": ["image"],
 }
 
 MODALITIES_SUPPORTED_PREFIXES = ("google/", "openai/")
@@ -44,6 +46,12 @@ TEXT_ONLY_STRING_CONTENT_MODELS = {
     "recraft/recraft-v4.1-pro-vector",
     "recraft/recraft-v4.1-vector",
     "x-ai/grok-imagine-image-quality",
+    "krea/krea-2-large",
+}
+
+# chat/completions ではなく専用の /api/v1/images エンドポイントを使うモデル
+IMAGES_API_MODELS = {
+    "openai/gpt-image-2",
 }
 
 
@@ -149,6 +157,32 @@ def image_generation_request(messages, model, openrouter_api_key=None):
                              json=payload, timeout=(10, 300))
     return response
 
+def image_api_request(prompt_text, image_paths, model, openrouter_api_key=None):
+    """専用の Images API (/api/v1/images) を使用した画像生成リクエスト"""
+    url = "https://openrouter.ai/api/v1/images"
+    headers = {
+        "Authorization": f"Bearer {openrouter_api_key or os.getenv('OPENROUTER_API_KEY')}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "model": model,
+        "prompt": prompt_text,
+    }
+
+    if image_paths:
+        payload["input_references"] = [
+            {
+                "type": "image_url",
+                "image_url": {"url": image_path_to_data_url(path)}
+            }
+            for path in image_paths
+        ]
+
+    response = requests.post(url, headers=headers,
+                             json=payload, timeout=(10, 300))
+    return response
+
 def save_response_images(output_base_folder, response_data, prompt_info_data):
     """レスポンスの画像をファイルに保存し、保存したパスリストを返す
     
@@ -163,9 +197,25 @@ def save_response_images(output_base_folder, response_data, prompt_info_data):
             - saved_image_paths: 保存した画像ファイルのパスリスト
     """
     choices = response_data.get("choices") or []
-    first_choice = choices[0] if choices else {}
-    message = first_choice.get("message", {}) if isinstance(first_choice, dict) else {}
-    images = message.get("images") or []
+    if choices:
+        # chat/completions 形式: choices[0].message.images[].image_url.url
+        first_choice = choices[0] if isinstance(choices[0], dict) else {}
+        message = first_choice.get("message", {}) if isinstance(first_choice, dict) else {}
+        raw_images = message.get("images") or []
+        image_base64_list = [
+            (image_info.get("image_url", {}) or {}).get("url")
+            for image_info in raw_images
+            if isinstance(image_info, dict)
+        ]
+    else:
+        # 専用 Images API 形式: data[].b64_json
+        data_items = response_data.get("data") or []
+        image_base64_list = [
+            item.get("b64_json")
+            for item in data_items
+            if isinstance(item, dict)
+        ]
+    image_base64_list = [image for image in image_base64_list if image]
 
     now = datetime.datetime.now()
     yyyymmdd_hy = now.strftime("%Y-%m-%d")
@@ -184,15 +234,12 @@ def save_response_images(output_base_folder, response_data, prompt_info_data):
 
     saved_image_paths = []
     # 最初の画像のみを保存（複数あっても全て同じ画像のため）
-    if images:
-        image_info = images[0]
-        image_url_data = image_info.get("image_url", {}) if isinstance(image_info, dict) else {}
-        base64_response = image_url_data.get("url")
-        if base64_response:
-            output_image_path = output_folder_path / f"{yyyymmddhhmmss}_{id}_0"
-            saved_path = save_base64_url_to_file(base64_response, output_image_path)
-            print(f"Saved image to {saved_path}")
-            saved_image_paths.append(saved_path)
+    if image_base64_list:
+        base64_response = image_base64_list[0]
+        output_image_path = output_folder_path / f"{yyyymmddhhmmss}_{id}_0"
+        saved_path = save_base64_url_to_file(base64_response, output_image_path)
+        print(f"Saved image to {saved_path}")
+        saved_image_paths.append(saved_path)
 
     # prompt_info.yaml/jsonを保存
     prompt_info_output_path = output_folder_path / f"{yyyymmddhhmmss}_{id}_prompt_info.yaml"
@@ -218,6 +265,9 @@ def unified_image_preview_request(prompt_text, image_paths, model, openrouter_ap
     Returns:
         APIレスポンス
     """
+    if model in IMAGES_API_MODELS:
+        return image_api_request(prompt_text, image_paths, model, openrouter_api_key)
+
     text_content = {"type": "text", "text": prompt_text}
 
     # 画像がある場合のみ画像コンテンツを追加
