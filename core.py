@@ -28,6 +28,7 @@ SUPPORTED_IMAGE_MODELS = [
     "openai/gpt-5.4-image-2",
     "openai/gpt-image-2",
     "microsoft/mai-image-2.5",
+    "microsoft/mai-image-2.5-pro",
     "x-ai/grok-imagine-image-quality",
     "krea/krea-2-large",
 ]
@@ -37,7 +38,6 @@ MODEL_MODALITIES = {
     "recraft/recraft-v4.1-pro-vector": ["image"],
     "recraft/recraft-v4.1-vector": ["image"],
     "x-ai/grok-imagine-image-quality": ["image"],
-    "krea/krea-2-large": ["image"],
 }
 
 MODALITIES_SUPPORTED_PREFIXES = ("google/", "openai/")
@@ -46,12 +46,13 @@ TEXT_ONLY_STRING_CONTENT_MODELS = {
     "recraft/recraft-v4.1-pro-vector",
     "recraft/recraft-v4.1-vector",
     "x-ai/grok-imagine-image-quality",
-    "krea/krea-2-large",
 }
 
 # chat/completions ではなく専用の /api/v1/images エンドポイントを使うモデル
 IMAGES_API_MODELS = {
     "openai/gpt-image-2",
+    "krea/krea-2-large",
+    "microsoft/mai-image-2.5-pro",
 }
 
 

@@ -252,18 +252,16 @@ def run_request(output_folder, api_key, model, prompt, *args):
 
         response_data = response.json()
         choices = response_data.get("choices") or []
+        images_api_data = response_data.get("data") or []
 
-        if not choices:
+        if not choices and not images_api_data:
             return create_error_response(
-                "エラー: レスポンスに choices がありません\n"
+                "エラー: レスポンスに choices/data がありません\n"
                 f"HTTP Status: {response.status_code}\n"
-                "画像生成有無: 不明 (choices がないため判定できません)\n"
+                "画像生成有無: 不明 (choices/data がないため判定できません)\n"
                 f"Response Text:\n{format_response_text(response, response_data)}"
             )
 
-        first_choice = choices[0] if isinstance(choices[0], dict) else {}
-        message = first_choice.get("message", {}) if isinstance(first_choice, dict) else {}
-        
         prompt_info_data = {
             "model": model,
             "text": prompt,
@@ -274,28 +272,47 @@ def run_request(output_folder, api_key, model, prompt, *args):
             Path(output_folder), response_data, prompt_info_data
         )
 
-        # レスポンスから結果テキストを取得
-        result_text = message.get("content", "")
-        if result_text is None:
-            result_text = ""
-        elif isinstance(result_text, list):
-            result_text = "\n".join(
-                item.get("text", "") if isinstance(item, dict) else str(item)
-                for item in result_text
-            )
-        images = message.get("images") or []
+        if choices:
+            # chat/completions 形式
+            first_choice = choices[0] if isinstance(choices[0], dict) else {}
+            message = first_choice.get("message", {}) if isinstance(first_choice, dict) else {}
 
-        # 画像が0枚の場合はfinish_reasonを表示
-        if len(images) == 0:
-            native_finish_reason = first_choice.get("native_finish_reason", "不明")
-            result = f"⚠️ 画像生成失敗\n\n結果:\n{result_text}\n\n"
-            result += f"生成された画像数: {len(images)}\n"
-            result += f"Finish Reason: {native_finish_reason}\n"
-            result += f"保存先: {output_folder_path}"
+            # レスポンスから結果テキストを取得
+            result_text = message.get("content", "")
+            if result_text is None:
+                result_text = ""
+            elif isinstance(result_text, list):
+                result_text = "\n".join(
+                    item.get("text", "") if isinstance(item, dict) else str(item)
+                    for item in result_text
+                )
+            images = message.get("images") or []
+
+            # 画像が0枚の場合はfinish_reasonを表示
+            if len(images) == 0:
+                native_finish_reason = first_choice.get("native_finish_reason", "不明")
+                result = f"⚠️ 画像生成失敗\n\n結果:\n{result_text}\n\n"
+                result += f"生成された画像数: {len(images)}\n"
+                result += f"Finish Reason: {native_finish_reason}\n"
+                result += f"保存先: {output_folder_path}"
+            else:
+                result = f"✅ 成功!\n\n結果:\n{result_text}\n\n"
+                result += f"生成された画像数: {len(images)}\n"
+                result += f"保存先: {output_folder_path}"
         else:
-            result = f"✅ 成功!\n\n結果:\n{result_text}\n\n"
-            result += f"生成された画像数: {len(images)}\n"
-            result += f"保存先: {output_folder_path}"
+            # 専用 Images API (/api/v1/images) 形式
+            image_count = sum(
+                1 for item in images_api_data
+                if isinstance(item, dict) and item.get("b64_json")
+            )
+            if image_count == 0:
+                result = "⚠️ 画像生成失敗\n\n"
+                result += f"生成された画像数: {image_count}\n"
+                result += f"保存先: {output_folder_path}"
+            else:
+                result = "✅ 成功!\n\n"
+                result += f"生成された画像数: {image_count}\n"
+                result += f"保存先: {output_folder_path}"
 
         # 保存済みファイルからPIL画像を読み込み（base64デコードの重複処理を回避）
         gallery_images = []
