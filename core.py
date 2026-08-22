@@ -18,41 +18,32 @@ SUPPORTED_IMAGE_MODELS = [
     "google/gemini-3.1-flash-image-preview",
     "google/gemini-3.1-flash-lite-image",
     "google/gemini-3-pro-image-preview",
-    "black-forest-labs/flux.2-pro",
-    "bytedance-seed/seedream-4.5",
-    "black-forest-labs/flux.2-klein-4b",
     "recraft/recraft-v4.1-pro-vector",
     "recraft/recraft-v4.1-vector",
-    "recraft/recraft-v4-pro",
-    "recraft/recraft-v4",
     "openai/gpt-5.4-image-2",
     "openai/gpt-image-2",
-    "microsoft/mai-image-2.5",
-    "microsoft/mai-image-2.5-pro",
-    "x-ai/grok-imagine-image-quality",
     "krea/krea-2-large",
+    "qwen/qwen-image-3",
+    "qwen/qwen-image-3-pro",
 ]
 
 MODEL_MODALITIES = {
-    "microsoft/mai-image-2.5": ["image"],
     "recraft/recraft-v4.1-pro-vector": ["image"],
     "recraft/recraft-v4.1-vector": ["image"],
-    "x-ai/grok-imagine-image-quality": ["image"],
 }
 
 MODALITIES_SUPPORTED_PREFIXES = ("google/", "openai/")
 TEXT_ONLY_STRING_CONTENT_MODELS = {
-    "microsoft/mai-image-2.5",
     "recraft/recraft-v4.1-pro-vector",
     "recraft/recraft-v4.1-vector",
-    "x-ai/grok-imagine-image-quality",
 }
 
 # chat/completions ではなく専用の /api/v1/images エンドポイントを使うモデル
 IMAGES_API_MODELS = {
     "openai/gpt-image-2",
     "krea/krea-2-large",
-    "microsoft/mai-image-2.5-pro",
+    "qwen/qwen-image-3",
+    "qwen/qwen-image-3-pro",
 }
 
 
@@ -303,26 +294,6 @@ def gemini_pro_3_1_image_preview_request(prompt_text, image_paths, openrouter_ap
 def gemini_pro_3_image_preview_request(prompt_text, image_paths, openrouter_api_key):
     """Gemini Pro 3を使用した画像生成リクエスト"""
     return unified_image_preview_request(prompt_text, image_paths, "google/gemini-3-pro-image-preview", openrouter_api_key)
-
-def flux_2_pro_image_preview_request(prompt_text, image_paths, openrouter_api_key):
-    """Flux 2 Proを使用した画像生成リクエスト"""
-    return unified_image_preview_request(prompt_text, image_paths, "black-forest-labs/flux.2-pro", openrouter_api_key)
-
-def speedream_4_5_image_preview_request(prompt_text, image_paths, openrouter_api_key):
-    """Speedream 4.5を使用した画像生成リクエスト"""
-    return unified_image_preview_request(prompt_text, image_paths, "bytedance-seed/seedream-4.5", openrouter_api_key)
-
-def flux_klein_image_preview_request(prompt_text, image_paths, openrouter_api_key):
-    """Flux Kleinを使用した画像生成リクエスト"""
-    return unified_image_preview_request(prompt_text, image_paths, "black-forest-labs/flux.2-klein-4b", openrouter_api_key)
-
-def recraft_v4_pro_image_preview_request(prompt_text, image_paths, openrouter_api_key):
-    """Recraft V4 Proを使用した画像生成リクエスト"""
-    return unified_image_preview_request(prompt_text, image_paths, "recraft/recraft-v4-pro", openrouter_api_key)
-
-def recraft_v4_image_preview_request(prompt_text, image_paths, openrouter_api_key):
-    """Recraft V4を使用した画像生成リクエスト"""
-    return unified_image_preview_request(prompt_text, image_paths, "recraft/recraft-v4", openrouter_api_key)
 
 def recraft_v4_1_pro_vector_request(prompt_text, image_paths, openrouter_api_key):
     """Recraft V4.1 Pro Vectorを使用した画像生成リクエスト"""
